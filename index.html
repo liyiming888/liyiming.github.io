@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素宝石猎人</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{background:#1a1a2e;font-family:Arial,sans-serif;padding:15px;color:#fff;}
+        .game{max-width:400px;margin:0 auto;border:2px solid #333;border-radius:15px;overflow:hidden;position:relative;}
+        .map{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:10px;background:#0f0f1f;}
+        .cell{width:100%;aspect-ratio:1;border-radius:8px;background:#16213e;cursor:pointer;display:flex;justify-content:center;align-items:center;font-size:24px;transition:background 0.2s;}
+        .cell:hover{background:#253560;}
+        .cell.player{background:#4cc9f0;}
+        .cell.gem{background:#f72585;}
+        .cell.npc{background:#4361ee;}
+        .cell.trap{background:#6a0572;}
+        .cell.chest{background:#fca311;}
+        .ui{display:flex;justify-content:space-between;padding:10px;background:#0f0f1f;align-items:center;}
+        .btn{padding:8px 15px;border:none;border-radius:8px;background:#4cc9f0;color:#000;cursor:pointer;font-size:14px;}
+        .msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);padding:15px 30px;border-radius:10px;display:none;z-index:10;}
+        .gem-animation{position:absolute;font-size:30px;animation:float 1s ease-out;opacity:0;}
+        @keyframes float{0%{transform:translate(-50%,-50%) scale(1);opacity:1;}100%{transform:translate(-50%,-100%) scale(0.5);opacity:0;}}
+    </style>
+</head>
+<body>
+    <div class="game">
+        <div class="ui">
+            <div>宝石: <span id="gemCount">0</span>/10（通关目标）</div>
+            <button class="btn" onclick="restartGame()">重新开始</button>
+        </div>
+        <div class="map" id="map"></div>
+        <div class="msg" id="msg"></div>
+    </div>
+
+    <script>
+        const mapSize = 5;
+        let playerPos = {x: 0, y: 0};
+        let gemCount = 0;
+        const cellTypes = ['empty','gem','npc','trap','chest'];
+        const cellIcons = ['','💎','👤','⚠️','🎁'];
+        const dom = {map:document.getElementById('map'),gemCount:document.getElementById('gemCount'),msg:document.getElementById('msg')};
+
+        // 生成地图
+        function generateMap() {
+            dom.map.innerHTML = '';
+            for(let y=0;y<mapSize;y++){
+                for(let x=0;x<mapSize;x++){
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    const type = x===0&&y===0?'player':cellTypes[Math.floor(Math.random()*100)%cellTypes.length];
+                    cell.classList.add(type);
+                    cell.textContent = cellIcons[cellTypes.indexOf(type)];
+                    cell.onclick = () => movePlayer(x,y);
+                    dom.map.appendChild(cell);
+                }
+            }
+        }
+
+        // 移动玩家
+        function movePlayer(targetX, targetY) {
+            if(Math.abs(targetX-playerPos.x)+Math.abs(targetY-playerPos.y)!==1) return; // 只能上下左右移动
+            // 移除旧玩家位置
+            const oldCell = dom.map.children[playerPos.y*mapSize+playerPos.x];
+            oldCell.classList.remove('player');
+            oldCell.textContent = '';
+            // 更新新位置
+            playerPos = {x:targetX,y:targetY};
+            const newCell = dom.map.children[targetY*mapSize+targetX];
+            const cellType = newCell.classList[1];
+            handleCellEvent(cellType, newCell);
+            newCell.classList.add('player');
+            newCell.textContent = '🧑';
+        }
+
+        // 触发格子事件
+        function handleCellEvent(type, cell) {
+            switch(type){
+                case 'gem': gemCount++; dom.gemCount.textContent=gemCount; gemAnimation(cell); cell.classList.remove('gem'); cell.textContent=''; checkWin(); break;
+                case 'npc': showMsg('NPC: 前面有宝箱！🎁'); break;
+                case 'trap': showMsg('踩到陷阱！宝石-1😱'); gemCount = Math.max(0,gemCount-1); dom.gemCount.textContent=gemCount; break;
+                case 'chest': const reward = Math.floor(Math.random()*3)+1; gemCount+=reward; dom.gemCount.textContent=gemCount; showMsg(`打开宝箱！获得${reward}颗宝石✨`); gemAnimation(cell,reward); cell.classList.remove('chest'); cell.textContent=''; checkWin(); break;
+            }
+        }
+
+        // 宝石收集动画
+        function gemAnimation(cell, count=1) {
+            for(let i=0;i<count;i++){
+                const gem = document.createElement('div');
+                gem.className = 'gem-animation';
+                gem.textContent = '💎';
+                gem.style.left = `${cell.offsetLeft+cell.offsetWidth/2}px`;
+                gem.style.top = `${cell.offsetTop+cell.offsetHeight/2}px`;
+                document.querySelector('.game').appendChild(gem);
+                setTimeout(()=>gem.remove(),1000);
+            }
+        }
+
+        // 通关检测
+        function checkWin() {
+            if(gemCount>=10) showMsg(`恭喜通关！收集了${gemCount}颗宝石🎉`, true);
+        }
+
+        // 显示消息
+        function showMsg(text, isWin=false) {
+            dom.msg.textContent = text;
+            dom.msg.style.display = 'block';
+            setTimeout(()=>{
+                dom.msg.style.display = 'none';
+                if(isWin) setTimeout(restartGame,1500);
+            }, isWin?3000:1500);
+        }
+
+        // 重启游戏
+        function restartGame() {
+            playerPos = {x:0,y:0};
+            gemCount = 0;
+            dom.gemCount.textContent = 0;
+            generateMap();
+        }
+
+        // 触屏滑动控制
+        let touchStartX, touchStartY;
+        document.querySelector('.game').addEventListener('touchstart',e=>{
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+        document.querySelector('.game').addEventListener('touchend',e=>{
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = e.changedTouches[0].clientY - touchStartY;
+            if(Math.abs(dx)>Math.abs(dy)){
+                const targetX = playerPos.x + (dx>0?1:-1);
+                if(targetX>=0&&targetX<mapSize) movePlayer(targetX, playerPos.y);
+            }else{
+                const targetY = playerPos.y + (dy>0?1:-1);
+                if(targetY>=0&&targetY<mapSize) movePlayer(playerPos.x, targetY);
+            }
+        });
+
+        // 初始化
+        generateMap();
+    </script>
+</body>
+</html>
+
